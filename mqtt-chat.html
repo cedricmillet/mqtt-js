@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>MQTT</title>
+		<meta charset="UTF-8" />
+		<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.js"></script>
+		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+		<script src="https://code.jquery.com/jquery-3.4.1.slim.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+		<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+		<link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+	</head>
+	<body>
+		<div class="container mt-3">
+			<h3 class="mb-4">Question 9.6 - un chat avec mqtt</h3>
+			<hr>
+			<div class="row mb-4">
+				<div class="col-3">
+					<p>MQTT Server Host</p>
+					<input type="text" id="host" value="broker.mqtt-dashboard.com" placeholder="MQTT Host" class="form-control loginput" />
+				</div>
+				<div class="col-3">
+					<p>MQTT WebSocket Port</p>
+					<input type="number" id="port" value="8000" placeholder="MQTT Port" class="form-control loginput" />
+				</div>
+				<div class="col-3">
+					<p>MQTT Subscribe Topic</p>
+					<input type="text" id="topic" value="esp61D4/chat" placeholder="topic" class="form-control loginput" />
+				</div>
+				<div class="col-3">
+					<p>STATUS : <span id="status"><b style="color:red">DISCONNECTED</b></span></p>
+					<button id="connect" class="btn btn-primary">Connect</button>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-6">
+					Votre clientID = <span id="clientid">N/A</span>
+				</div>
+			</div>
+			<ul id="console" style="width:100%;height:250px;overflow-y:auto" class="card">
+				<li>Cliquez sur "connect" pour établir la connexion au topic de chat.</li>
+			</ul>
+			
+			<div class="row">
+				<div class="col-2">
+					<input type="text" class="form-control" placeholder="Pseudo" id="username" value="User" />
+				</div>
+				<div class="col-8">
+					<input type="text" class="form-control" placeholder="Votre message" id="message" />
+				</div>
+				<div class="col-2">
+					<button class="sendmsg btn btn-success" style="width:100%">Envoyer</button>
+				</div>
+			</div>
+			<center class="mt-5">Made with ❤ by Cédric MILLET</center>
+		</div>
+		
+		
+		
+		
+	  
+		<script src="script-mqtt.js"></script>
+		<script>
+			$( document ).ready(function() {
+				var mqtt = null;
+				/* CONNECT MQTT */
+				$('#connect').click(function() {
+					$('#connect').attr('disabled', 'true');
+					$('.loginput').attr('disabled', 'true');
+
+					mqtt = new MQTT_CONNECTOR( $('#host').val(), parseInt($('#port').val()) );
+					mqtt.subscribe( $('#topic').val() );
+					mqtt.connect();
+					
+					mqtt.setReceiveFunction( function(data) {
+						console.log("reception data :  ", data);
+						let chatbox = $('#console');
+						//	Ajout du message dans la console
+						let date = getFormatedCurrentTime();
+						let m = decode_msg(data.data);
+						if(m.clientID==mqtt.getClientID())
+							chatbox.append("<li style='font-weight:bold;color: purple'>["+date+"][#"+m.clientID+"][" +m.user+"] → "+ m.text + "</li>");
+						else
+							chatbox.append("<li style='color: blue'>["+date+"][#"+m.clientID+"][<b>" +m.user+"</b>] → "+ m.text + "</li>");
+						//	Scroll to bottom
+						chatbox.scrollTop(1000000);
+					});
+					mqtt.setConnectFunction(function() {
+						$('#status').html('<b style="color:green">CONNECTED</b>');
+						$('#clientid').html(mqtt.getClientID());
+					});
+				});
+				
+				function logIntoConsole(text, color="black") {
+					$('#console').append("<li style='color: "+color+"'>" + text + "</li>");
+				}
+
+				function encode_msg(pseudo, message) {
+					return mqtt.getClientID() + "|" + pseudo + "|" + message;
+				}
+
+				function decode_msg(msg) {
+					msg = msg.toString();
+					let _clientID = msg.split('|')[0];
+					let _user = msg.split('|')[1];
+					let _text = msg.split('|')[2];
+					return {clientID: _clientID, user: _user, text: _text};
+				}
+
+				function getFormatedCurrentTime() {
+				  var d = new Date();
+				  var h = d.getHours();
+				  var m = d.getMinutes();
+				  var s = d.getSeconds();
+				  return h + ":" + m + ":" + s;
+				}
+								
+				
+				$('.sendmsg').click(async function() {
+					if(!mqtt) {	logIntoConsole("Etablissez d'abord une connexion au serveur !", "red"); return;	}
+					let text = $('input#message').val();
+					let username = $('input#username').val();
+					if(!text || !username) {	logIntoConsole("Champs incomplets !", "red"); return;	}
+
+					mqtt.publish( $('#topic').val() , encode_msg(username, text) );
+
+					//Reset inputs
+					$('input#message').val('');
+				});
+				
+				
+			});
+		</script>
+	</body>
+</html>
+
